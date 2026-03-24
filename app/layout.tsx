@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AuthAI - Insurance Authorization Parser",
-  description: "AI-powered insurance authorization document parsing and analysis",
+  title: "PriorAuthAI",
+  description: "Medical prior authorization assistant powered by Claude",
 };
 
 export default function RootLayout({
@@ -36,7 +36,7 @@ export default function RootLayout({
               <div className="flex justify-between items-center h-16">
                 <div>
                   <a href="/" className="font-bold text-xl text-blue-600">
-                    AuthAI
+                    PriorAuthAI
                   </a>
                 </div>
                 <Nav />

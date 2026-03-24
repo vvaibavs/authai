@@ -24,7 +24,7 @@ export default function LoginPage() {
       if (error) {
         setError(error.message)
       } else {
-        router.push('/')
+        router.push('/dashboard')
       }
     } else {
       const { error } = await supabase.auth.signUp({ email, password })

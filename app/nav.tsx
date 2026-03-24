@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useAuth } from '@/context/authcontext'
 import { useRouter } from 'next/navigation'
 
@@ -9,27 +10,31 @@ export default function Nav() {
 
   const handleSignOut = async () => {
     await signOut()
-    router.push('/login')
+    router.push('/')
   }
 
   return (
     <nav className="flex items-center gap-4 text-sm text-gray-700">
-      <a href="/" className="hover:text-blue-600">Home</a>
-      <a href="/about" className="hover:text-blue-600">About</a>
       {user ? (
         <>
-          <span className="text-gray-400">{user.email}</span>
+          <Link href="/dashboard" className="hover:text-blue-600">Dashboard</Link>
           <button
             onClick={handleSignOut}
-            className="bg-red-500 text-white px-4 py-1.5 rounded-lg hover:bg-red-600 transition-colors"
+            className="bg-gray-100 text-gray-700 px-4 py-1.5 rounded-lg hover:bg-gray-200 transition-colors"
           >
             Sign out
           </button>
         </>
       ) : (
-        <a href="/login" className="bg-blue-600 text-white px-4 py-1.5 rounded-lg hover:bg-blue-700 transition-colors">
-          Login
-        </a>
+        <>
+          <Link href="/login" className="hover:text-blue-600">Sign in</Link>
+          <Link
+            href="/login"
+            className="bg-blue-600 text-white px-4 py-1.5 rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Get started
+          </Link>
+        </>
       )}
     </nav>
   )
