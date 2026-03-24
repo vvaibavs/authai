@@ -9,177 +9,95 @@ if (!supabaseUrl || !supabaseKey) {
 
 export const supabase = createClient(supabaseUrl, supabaseKey)
 
-export interface UploadResult {
-  success: boolean
-  data?: {
-    path: string
-    fullPath: string
-    id: string
-  }
-  error?: string
-}
+const BUCKET = 'documents'
 
-export interface FileInfo {
-  name: string
+export interface Document {
   id: string
-  updated_at: string
-  created_at: string
-  last_accessed_at: string
-  metadata: Record<string, any>
+  user_id: string
+  storage_path: string
+  filename: string
+  uploaded_at: string
 }
 
 /**
- * Upload a file to Supabase storage
- * @param file - The file to upload
- * @param bucket - The storage bucket name (default: 'auth-documents')
- * @param folder - Optional folder path within the bucket
- * @returns UploadResult
+ * Upload a file to storage and record it in the documents table.
  */
-export async function uploadFile(
+export async function uploadDocument(
   file: File,
-  bucket: string = 'auth-documents',
-  folder?: string
-): Promise<UploadResult> {
-  try {
-    // Generate unique filename to avoid conflicts
-    const fileExt = file.name.split('.').pop()
-    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
-    const filePath = folder ? `${folder}/${fileName}` : fileName
+  userId: string
+): Promise<{ document: Document } | { error: string }> {
+  // 1. Upload to storage
+  const timestamp = Date.now()
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+  const storagePath = `${userId}/${timestamp}-${safeName}`
 
-    const { data, error } = await supabase.storage
-      .from(bucket)
-      .upload(filePath, file, {
-        cacheControl: '3600',
-        upsert: false
-      })
+  const { error: storageError } = await supabase.storage
+    .from(BUCKET)
+    .upload(storagePath, file, { cacheControl: '3600', upsert: false })
 
-    if (error) {
-      console.error('Upload error:', error)
-      return {
-        success: false,
-        error: error.message
-      }
-    }
-
-    return {
-      success: true,
-      data: {
-        path: data.path,
-        fullPath: `${supabaseUrl}/storage/v1/object/public/${bucket}/${data.path}`,
-        id: data.id
-      }
-    }
-  } catch (error) {
-    console.error('Upload failed:', error)
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown upload error'
-    }
+  if (storageError) {
+    console.error('Storage upload error:', storageError)
+    return { error: storageError.message }
   }
-}
 
-/**
- * Upload multiple files to Supabase storage
- * @param files - Array of files to upload
- * @param bucket - The storage bucket name (default: 'auth-documents')
- * @param folder - Optional folder path within the bucket
- * @returns Array of UploadResult
- */
-export async function uploadFiles(
-  files: File[],
-  bucket: string = 'auth-documents',
-  folder?: string
-): Promise<UploadResult[]> {
-  const results = await Promise.all(
-    files.map(file => uploadFile(file, bucket, folder))
-  )
-  return results
-}
+  // 2. Insert a row in the documents table
+  const { data, error: dbError } = await supabase
+    .from('documents')
+    .insert({ user_id: userId, storage_path: storagePath, filename: file.name })
+    .select()
+    .single()
 
-/**
- * Get a signed URL for downloading a file
- * @param path - The file path in storage
- * @param bucket - The storage bucket name (default: 'auth-documents')
- * @param expiresIn - URL expiration time in seconds (default: 3600)
- * @returns Signed URL or null if failed
- */
-export async function getSignedUrl(
-  path: string,
-  bucket: string = 'auth-documents',
-  expiresIn: number = 3600
-): Promise<string | null> {
-  try {
-    const { data, error } = await supabase.storage
-      .from(bucket)
-      .createSignedUrl(path, expiresIn)
-
-    if (error) {
-      console.error('Signed URL error:', error)
-      return null
-    }
-
-    return data.signedUrl
-  } catch (error) {
-    console.error('Failed to create signed URL:', error)
-    return null
+  if (dbError) {
+    console.error('DB insert error:', dbError)
+    // Clean up the orphaned file in storage
+    await supabase.storage.from(BUCKET).remove([storagePath])
+    return { error: dbError.message }
   }
+
+  return { document: data as Document }
 }
 
 /**
- * List files in a storage bucket
- * @param bucket - The storage bucket name (default: 'auth-documents')
- * @param folder - Optional folder path to list files from
- * @returns Array of FileInfo or null if failed
+ * List all documents belonging to the signed-in user, newest first.
  */
-export async function listFiles(
-  bucket: string = 'auth-documents',
-  folder?: string
-): Promise<FileInfo[] | null> {
-  try {
-    const { data, error } = await supabase.storage
-      .from(bucket)
-      .list(folder, {
-        limit: 100,
-        offset: 0,
-        sortBy: { column: 'created_at', order: 'desc' }
-      })
+export async function listDocuments(): Promise<Document[]> {
+  const { data, error } = await supabase
+    .from('documents')
+    .select('*')
+    .order('uploaded_at', { ascending: false })
 
-    if (error) {
-      console.error('List files error:', error)
-      return null
-    }
-
-    return data as FileInfo[]
-  } catch (error) {
-    console.error('Failed to list files:', error)
-    return null
+  if (error) {
+    console.error('List error:', error)
+    return []
   }
+
+  return data as Document[]
 }
 
 /**
- * Delete a file from storage
- * @param path - The file path to delete
- * @param bucket - The storage bucket name (default: 'auth-documents')
- * @returns Success status
+ * Delete a document from both the database and storage.
  */
-export async function deleteFile(
-  path: string,
-  bucket: string = 'auth-documents'
-): Promise<boolean> {
-  try {
-    const { error } = await supabase.storage
-      .from(bucket)
-      .remove([path])
+export async function deleteDocument(doc: Document): Promise<boolean> {
+  // 1. Delete the database row (RLS ensures users can only delete their own)
+  const { error: dbError } = await supabase
+    .from('documents')
+    .delete()
+    .eq('id', doc.id)
 
-    if (error) {
-      console.error('Delete file error:', error)
-      return false
-    }
-
-    return true
-  } catch (error) {
-    console.error('Failed to delete file:', error)
+  if (dbError) {
+    console.error('DB delete error:', dbError)
     return false
   }
-}
 
+  // 2. Remove from storage
+  const { error: storageError } = await supabase.storage
+    .from(BUCKET)
+    .remove([doc.storage_path])
+
+  if (storageError) {
+    console.error('Storage delete error:', storageError)
+    // Row is already gone from DB — not a fatal error
+  }
+
+  return true
+}
