@@ -1,8 +1,10 @@
+import Cursor from '@/components/cursor'
 import Link from 'next/link'
 
 export default function LandingPage() {
   return (
     <div className="min-h-screen bg-white">
+        <Cursor/>
 
       {/* Hero */}
       <section className="bg-gradient-to-b from-blue-50 to-white">
