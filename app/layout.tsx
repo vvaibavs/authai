@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/context/authcontext";
+import { ThemeProvider } from "@/context/themeContext";
 import Nav from "@/app/nav";
 
 const geistSans = Geist({
@@ -29,28 +30,30 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-gray-50 text-gray-900">
+      <body className="min-h-full flex flex-col">
         <AuthProvider>
-          <header className="bg-white border-b border-gray-200">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-              <div className="flex justify-between items-center h-16">
-                <div>
-                  <a href="/" className="font-bold text-xl text-blue-600">
-                    PriorAuthAI
-                  </a>
+          <ThemeProvider>
+            <header className="bg-[var(--theme-surface)] border-b border-[var(--theme-border)]">
+              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div className="flex justify-between items-center h-16">
+                  <div>
+                    <a href="/" className="font-bold text-xl text-[var(--theme-primaryText)]">
+                      PriorAuthAI
+                    </a>
+                  </div>
+                  <Nav />
                 </div>
-                <Nav />
               </div>
-            </div>
-          </header>
+            </header>
 
-          <main className="flex-1">{children}</main>
+            <main className="flex-1">{children}</main>
 
-          <footer className="bg-gray-900 text-white py-6">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-              <p className="text-sm text-gray-400">&copy; {new Date().getFullYear()} AuthAI. All rights reserved.</p>
-            </div>
-          </footer>
+            <footer className="bg-gray-900 text-white py-6">
+              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+                <p className="text-sm text-gray-400">&copy; {new Date().getFullYear()} AuthAI. All rights reserved.</p>
+              </div>
+            </footer>
+          </ThemeProvider>
         </AuthProvider>
       </body>
     </html>

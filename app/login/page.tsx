@@ -39,19 +39,19 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-      <div className="w-full max-w-md bg-white rounded-xl shadow-sm border border-gray-200 p-8">
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">
+    <div className="min-h-screen flex items-center justify-center bg-[var(--theme-background)] px-4">
+      <div className="w-full max-w-md bg-[var(--theme-surface)] rounded-xl shadow-sm border border-[var(--theme-border)] p-8">
+        <h1 className="text-2xl font-bold text-[var(--theme-textPrimary)] mb-2">
           {mode === 'signin' ? 'Sign in to AuthAI' : 'Create an account'}
         </h1>
-        <p className="text-sm text-gray-500 mb-6">
+        <p className="text-sm text-[var(--theme-textMuted)] mb-6">
           {mode === 'signin'
             ? "Don't have an account? "
             : 'Already have an account? '}
           <button
             type="button"
             onClick={() => { setMode(mode === 'signin' ? 'signup' : 'signin'); setError(null); setMessage(null) }}
-            className="text-blue-600 hover:underline font-medium"
+            className="text-[var(--theme-primaryText)] hover:underline font-medium"
           >
             {mode === 'signin' ? 'Sign up' : 'Sign in'}
           </button>
@@ -59,7 +59,7 @@ export default function LoginPage() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="email" className="block text-sm font-medium text-[var(--theme-textSecondary)] mb-1">
               Email
             </label>
             <input
@@ -68,13 +68,13 @@ export default function LoginPage() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-[var(--theme-border)] bg-[var(--theme-surface)] text-[var(--theme-textPrimary)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--theme-primary)] focus:border-transparent"
               placeholder="you@example.com"
             />
           </div>
 
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="password" className="block text-sm font-medium text-[var(--theme-textSecondary)] mb-1">
               Password
             </label>
             <input
@@ -83,19 +83,19 @@ export default function LoginPage() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-[var(--theme-border)] bg-[var(--theme-surface)] text-[var(--theme-textPrimary)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--theme-primary)] focus:border-transparent"
               placeholder="••••••••"
             />
           </div>
 
           {error && (
-            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            <p className="text-sm text-[var(--theme-error)] bg-[var(--theme-errorBg)] border border-[var(--theme-errorBorder)] rounded-lg px-3 py-2">
               {error}
             </p>
           )}
 
           {message && (
-            <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+            <p className="text-sm text-[var(--theme-success)] bg-[var(--theme-successBg)] border border-[var(--theme-successBorder)] rounded-lg px-3 py-2">
               {message}
             </p>
           )}
@@ -103,7 +103,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="w-full bg-[var(--theme-primary)] text-white py-2 px-4 rounded-lg font-medium hover:bg-[var(--theme-primaryHover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {loading ? 'Please wait...' : mode === 'signin' ? 'Sign in' : 'Create account'}
           </button>

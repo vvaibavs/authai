@@ -1,14 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { TextractClient, DetectDocumentTextCommand } from '@aws-sdk/client-textract'
-
-const textract = new TextractClient({
-  region: process.env.AWS_REGION!,
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-  },
-})
 
 // POST /api/extract
 // Body: multipart form data with a single "file" field
@@ -31,15 +22,24 @@ export async function POST(request: NextRequest) {
   if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 })
 
   const buffer = Buffer.from(await file.arrayBuffer())
+  const base64 = buffer.toString('base64')
 
-  const { Blocks } = await textract.send(
-    new DetectDocumentTextCommand({ Document: { Bytes: buffer } })
+  const response = await fetch(
+    `https://vision.googleapis.com/v1/images:annotate?key=${process.env.GEMINI_API_KEY}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        requests: [{
+          image: { content: base64 },
+          features: [{ type: 'DOCUMENT_TEXT_DETECTION' }],
+        }],
+      }),
+    }
   )
 
-  const text = (Blocks ?? [])
-    .filter(b => b.BlockType === 'LINE')
-    .map(b => b.Text ?? '')
-    .join('\n')
+  const json = await response.json()
+  const text = json.responses?.[0]?.fullTextAnnotation?.text ?? ''
 
   if (!text.trim()) {
     return NextResponse.json({ error: 'No text could be extracted from the document' }, { status: 422 })

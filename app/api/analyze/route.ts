@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import Anthropic from '@anthropic-ai/sdk'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+const genai = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
 
 // POST /api/analyze
 // Body: { text: string }
@@ -23,13 +23,9 @@ export async function POST(request: NextRequest) {
   const { text } = await request.json() as { text?: string }
   if (!text?.trim()) return NextResponse.json({ error: 'No text provided' }, { status: 400 })
 
-  const message = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514',
-    max_tokens: 1024,
-    messages: [
-      {
-        role: 'user',
-        content: `You are a medical prior authorization specialist. Extract the following fields from the document text and return them as a JSON object. If a field is not found, use exactly: "Not found - please complete manually".
+  const model = genai.getGenerativeModel({ model: 'gemini-1.5-flash' })
+
+  const result = await model.generateContent(`You are a medical prior authorization specialist. Extract the following fields from the document text and return them as a JSON object. If a field is not found, use exactly: "Not found - please complete manually".
 
 Fields:
 - patientName
@@ -43,17 +39,11 @@ Fields:
 Return ONLY valid JSON with these 7 keys, no other text.
 
 Document:
-${text}`,
-      },
-    ],
-  })
+${text}`)
 
-  const block = message.content[0]
-  if (block.type !== 'text') {
-    return NextResponse.json({ error: 'Unexpected response from AI' }, { status: 500 })
-  }
+  const responseText = result.response.text()
 
-  const match = block.text.match(/\{[\s\S]*\}/)
+  const match = responseText.match(/\{[\s\S]*\}/)
   if (!match) {
     return NextResponse.json({ error: 'Could not parse AI response as JSON' }, { status: 500 })
   }

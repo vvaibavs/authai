@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(find /c/Users/vaiba/Documents/authai -type f -name *.tsx -o -name *.ts -o -name *.json -o -name .env*)"
+      "Bash(find /c/Users/vaiba/Documents/authai -type f -name *.tsx -o -name *.ts -o -name *.json -o -name .env*)",
+      "Bash(npm install:*)",
+      "Bash(npm uninstall:*)"
     ]
   }
 }
