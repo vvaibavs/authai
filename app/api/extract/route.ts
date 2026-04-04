@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { GoogleGenerativeAI } from '@google/generative-ai'
+
+const genai = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
 
 // POST /api/extract
 // Body: multipart form data with a single "file" field
@@ -23,23 +26,18 @@ export async function POST(request: NextRequest) {
 
   const buffer = Buffer.from(await file.arrayBuffer())
   const base64 = buffer.toString('base64')
+  const mimeType = file.type || 'application/octet-stream'
 
-  const response = await fetch(
-    `https://vision.googleapis.com/v1/images:annotate?key=${process.env.GEMINI_API_KEY}`,
+  const model = genai.getGenerativeModel({ model: 'gemini-2.0-flash' })
+
+  const result = await model.generateContent([
     {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        requests: [{
-          image: { content: base64 },
-          features: [{ type: 'DOCUMENT_TEXT_DETECTION' }],
-        }],
-      }),
-    }
-  )
+      inlineData: { data: base64, mimeType },
+    },
+    'Extract all text from this document exactly as it appears. Return only the raw text with no commentary.',
+  ])
 
-  const json = await response.json()
-  const text = json.responses?.[0]?.fullTextAnnotation?.text ?? ''
+  const text = result.response.text()
 
   if (!text.trim()) {
     return NextResponse.json({ error: 'No text could be extracted from the document' }, { status: 422 })

@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
   const { text } = await request.json() as { text?: string }
   if (!text?.trim()) return NextResponse.json({ error: 'No text provided' }, { status: 400 })
 
-  const model = genai.getGenerativeModel({ model: 'gemini-1.5-flash' })
+  const model = genai.getGenerativeModel({ model: 'gemini-2.0-flash' })
 
   const result = await model.generateContent(`You are a medical prior authorization specialist. Extract the following fields from the document text and return them as a JSON object. If a field is not found, use exactly: "Not found - please complete manually".
 
