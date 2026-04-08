@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { GoogleGenerativeAI } from '@google/generative-ai'
-
-const genai = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
+import pdfParse from 'pdf-parse'
 
 // POST /api/extract
 // Body: multipart form data with a single "file" field
@@ -24,24 +22,20 @@ export async function POST(request: NextRequest) {
   const file = formData.get('file') as File | null
   if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 })
 
-  const buffer = Buffer.from(await file.arrayBuffer())
-  const base64 = buffer.toString('base64')
   const mimeType = file.type || 'application/octet-stream'
+  if (!mimeType.includes('pdf')) {
+    console.log(formData);
+    // return NextResponse.json({ error: 'Only PDF files are supported for text extraction' }, { status: 415 })
+  }
 
-  const model = genai.getGenerativeModel({ model: 'gemini-2.0-flash' })
+  const buffer = Buffer.from(await file.arrayBuffer())
+  const parsed = await pdfParse(buffer)
+  const text = parsed.text?.trim()
 
-  const result = await model.generateContent([
-    {
-      inlineData: { data: base64, mimeType },
-    },
-    'Extract all text from this document exactly as it appears. Return only the raw text with no commentary.',
-  ])
-
-  const text = result.response.text()
-
-  if (!text.trim()) {
+  if (!text) {
     return NextResponse.json({ error: 'No text could be extracted from the document' }, { status: 422 })
   }
+  console.log(text);
 
   return NextResponse.json({ text })
 }
