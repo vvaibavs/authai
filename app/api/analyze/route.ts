@@ -23,28 +23,27 @@ export async function POST(request: NextRequest) {
   const { text } = await request.json() as { text?: string }
   if (!text?.trim()) return NextResponse.json({ error: 'No text provided' }, { status: 400 })
 
-  const model = genai.getGenerativeModel({ model: 'gemini-2.0-flash' })
+  const model = genai.getGenerativeModel({ model: 'gemini-2.5-flash' })
 
   const result = await model.generateContent(`
-//     You are a medical prior authorization specialist. Extract the following fields from the document text and return them as a JSON object. If a field is not found, use exactly: "Not found - please complete manually".
+    You are a medical prior authorization specialist. Extract the following fields from the document text and return them as a JSON object. If a field is not found, use exactly: "Not found - please complete manually".
 
-// Fields:
-// - patientName
-// - dateOfBirth
-// - insuranceId
-// - diagnosisCode (ICD-10)
-// - procedureRequested (include CPT code if available)
-// - treatingPhysician
-// - medicalNecessityJustification
+Fields:
+- patientName
+- dateOfBirth
+- insuranceId
+- diagnosisCode (ICD-10)
+- procedureRequested (include CPT code if available)
+- treatingPhysician
+- medicalNecessityJustification
 
-// Return ONLY valid JSON with these 7 keys, no other text.
-
-read this document and return the first five words of lorem ipsum in JSON format with the key "data":
+Return ONLY valid JSON with these 7 keys, no other text.
 
 Document:
 ${text}`)
 
   const responseText = result.response.text()
+  console.log('AI response:', responseText);
 
   const match = responseText.match(/\{[\s\S]*\}/)
   if (!match) {

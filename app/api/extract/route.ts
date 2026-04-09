@@ -24,7 +24,6 @@ export async function POST(request: NextRequest) {
 
   const mimeType = file.type || 'application/octet-stream'
   if (!mimeType.includes('pdf')) {
-    console.log(formData);
     // return NextResponse.json({ error: 'Only PDF files are supported for text extraction' }, { status: 415 })
   }
 
@@ -35,7 +34,6 @@ export async function POST(request: NextRequest) {
   if (!text) {
     return NextResponse.json({ error: 'No text could be extracted from the document' }, { status: 422 })
   }
-  console.log(text);
 
   return NextResponse.json({ text })
 }
