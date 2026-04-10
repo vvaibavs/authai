@@ -450,32 +450,20 @@ export default function Dashboard() {
                 {/* Results form */}
                 {selectedStatus === 'done' && editedFields[selectedDoc.id] && (
                   <div className="p-5 space-y-4">
-                    {(Object.keys(FIELD_LABELS) as (keyof PriorAuthDraft)[]).map(field => {
-                      const value = editedFields[selectedDoc.id][field]
-                      const isMissing = value === NOT_FOUND
-                      const isMultiline = field === 'medicalNecessityJustification'
-
-                      return (
-                        <div key={field}>
-                          <label className="block text-xs font-medium text-[var(--theme-textMuted)] mb-1">
-                            {FIELD_LABELS[field]}
-                            {isMissing && (
-                              <span className="ml-2 text-yellow-600 dark:text-yellow-400 font-normal">needs review</span>
-                            )}
-                          </label>
-                          {isMultiline ? (
-                            <textarea
-                              value={isMissing ? '' : value}
-                              onChange={e => updateField(selectedDoc.id, field, e.target.value)}
-                              placeholder={isMissing ? 'Enter manually' : undefined}
-                              rows={3}
-                              className={`w-full text-sm px-3 py-2 rounded-lg border transition-colors bg-[var(--theme-background)] text-[var(--theme-textPrimary)] resize-none focus:outline-none focus:ring-2 focus:ring-[var(--theme-primary)] ${
-                                isMissing
-                                  ? 'border-yellow-400 placeholder-yellow-500'
-                                  : 'border-[var(--theme-border)]'
-                              }`}
-                            />
-                          ) : (
+                    {/* Extracted fields */}
+                    {(Object.keys(FIELD_LABELS) as (keyof PriorAuthDraft)[])
+                      .filter(f => f !== 'medicalNecessityJustification')
+                      .map(field => {
+                        const value = editedFields[selectedDoc.id][field]
+                        const isMissing = value === NOT_FOUND
+                        return (
+                          <div key={field}>
+                            <label className="block text-xs font-medium text-[var(--theme-textMuted)] mb-1">
+                              {FIELD_LABELS[field]}
+                              {isMissing && (
+                                <span className="ml-2 text-yellow-600 dark:text-yellow-400 font-normal">needs review</span>
+                              )}
+                            </label>
                             <input
                               type="text"
                               value={isMissing ? '' : value}
@@ -487,10 +475,43 @@ export default function Dashboard() {
                                   : 'border-[var(--theme-border)]'
                               }`}
                             />
-                          )}
+                          </div>
+                        )
+                      })}
+
+                    {/* Medical Necessity Justification — AI-generated, prominent section */}
+                    <div className="pt-2">
+                      <div className="rounded-xl border-2 border-[var(--theme-primary)] bg-[var(--theme-primaryLight)] p-4 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-semibold text-[var(--theme-textPrimary)] uppercase tracking-wide">
+                            Medical Necessity Justification
+                          </span>
+                          <span className="text-[10px] font-medium bg-[var(--theme-primary)] text-white px-2 py-0.5 rounded-full">
+                            AI-Generated
+                          </span>
                         </div>
-                      )
-                    })}
+                        <p className="text-[11px] text-[var(--theme-textMuted)]">
+                          Synthesized from the document. Review and edit before submission.
+                        </p>
+                        {(() => {
+                          const value = editedFields[selectedDoc.id].medicalNecessityJustification
+                          const isMissing = value === NOT_FOUND
+                          return (
+                            <textarea
+                              value={isMissing ? '' : value}
+                              onChange={e => updateField(selectedDoc.id, 'medicalNecessityJustification', e.target.value)}
+                              placeholder={isMissing ? 'The AI could not generate a justification — enter manually.' : undefined}
+                              rows={8}
+                              className={`w-full text-sm px-3 py-2 rounded-lg border transition-colors bg-[var(--theme-surface)] text-[var(--theme-textPrimary)] resize-y focus:outline-none focus:ring-2 focus:ring-[var(--theme-primary)] ${
+                                isMissing
+                                  ? 'border-yellow-400 placeholder-yellow-500'
+                                  : 'border-[var(--theme-primary)] border-opacity-40'
+                              }`}
+                            />
+                          )
+                        })()}
+                      </div>
+                    </div>
                   </div>
                 )}
               </>

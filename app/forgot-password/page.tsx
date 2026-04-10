@@ -1,15 +1,11 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/utils/storage'
 
-export default function LoginPage() {
-  const router = useRouter()
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin')
+export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -20,20 +16,14 @@ export default function LoginPage() {
     setMessage(null)
     setLoading(true)
 
-    if (mode === 'signin') {
-      const { error } = await supabase.auth.signInWithPassword({ email, password })
-      if (error) {
-        setError(error.message)
-      } else {
-        router.push('/dashboard')
-      }
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    })
+
+    if (error) {
+      setError(error.message)
     } else {
-      const { error } = await supabase.auth.signUp({ email, password })
-      if (error) {
-        setError(error.message)
-      } else {
-        setMessage('Check your email to confirm your account.')
-      }
+      setMessage('Check your email for a password reset link.')
     }
 
     setLoading(false)
@@ -43,19 +33,13 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-[var(--theme-background)] px-4">
       <div className="w-full max-w-md bg-[var(--theme-surface)] rounded-xl shadow-sm border border-[var(--theme-border)] p-8">
         <h1 className="text-2xl font-bold text-[var(--theme-textPrimary)] mb-2">
-          {mode === 'signin' ? 'Sign in to AuthAI' : 'Create an account'}
+          Reset your password
         </h1>
         <p className="text-sm text-[var(--theme-textMuted)] mb-6">
-          {mode === 'signin'
-            ? "Don't have an account? "
-            : 'Already have an account? '}
-          <button
-            type="button"
-            onClick={() => { setMode(mode === 'signin' ? 'signup' : 'signin'); setError(null); setMessage(null) }}
-            className="text-[var(--theme-primaryText)] hover:underline font-medium"
-          >
-            {mode === 'signin' ? 'Sign up' : 'Sign in'}
-          </button>
+          Enter your email and we'll send you a reset link.{' '}
+          <Link href="/login" className="text-[var(--theme-primaryText)] hover:underline font-medium">
+            Back to sign in
+          </Link>
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -71,28 +55,6 @@ export default function LoginPage() {
               onChange={(e) => setEmail(e.target.value)}
               className="w-full px-3 py-2 border border-[var(--theme-border)] bg-[var(--theme-surface)] text-[var(--theme-textPrimary)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--theme-primary)] focus:border-transparent"
               placeholder="you@example.com"
-            />
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label htmlFor="password" className="block text-sm font-medium text-[var(--theme-textSecondary)]">
-                Password
-              </label>
-              {mode === 'signin' && (
-                <Link href="/forgot-password" className="text-xs text-[var(--theme-primaryText)] hover:underline">
-                  Forgot password?
-                </Link>
-              )}
-            </div>
-            <input
-              id="password"
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-3 py-2 border border-[var(--theme-border)] bg-[var(--theme-surface)] text-[var(--theme-textPrimary)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--theme-primary)] focus:border-transparent"
-              placeholder="••••••••"
             />
           </div>
 
@@ -113,7 +75,7 @@ export default function LoginPage() {
             disabled={loading}
             className="w-full bg-[var(--theme-primary)] text-white py-2 px-4 rounded-lg font-medium hover:bg-[var(--theme-primaryHover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            {loading ? 'Please wait...' : mode === 'signin' ? 'Sign in' : 'Create account'}
+            {loading ? 'Sending...' : 'Send reset link'}
           </button>
         </form>
       </div>

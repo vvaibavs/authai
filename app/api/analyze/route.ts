@@ -26,16 +26,24 @@ export async function POST(request: NextRequest) {
   const model = genai.getGenerativeModel({ model: 'gemini-2.5-flash' })
 
   const result = await model.generateContent(`
-    You are a medical prior authorization specialist. Extract the following fields from the document text and return them as a JSON object. If a field is not found, use exactly: "Not found - please complete manually".
+You are a medical prior authorization specialist with deep clinical knowledge. Given the document text below, do two things:
 
-Fields:
-- patientName
-- dateOfBirth
-- insuranceId
-- diagnosisCode (ICD-10)
-- procedureRequested (include CPT code if available)
-- treatingPhysician
-- medicalNecessityJustification
+1. EXTRACT these fields exactly as they appear in the document. If a field is not found, use exactly: "Not found - please complete manually".
+   - patientName
+   - dateOfBirth
+   - insuranceId
+   - diagnosisCode (ICD-10 code and full description)
+   - procedureRequested (include CPT code if available)
+   - treatingPhysician
+
+2. GENERATE a medicalNecessityJustification. This is the most important output. Write a thorough, professional medical necessity justification paragraph (150–250 words) suitable for submission to an insurance payer. It must:
+   - State the patient's diagnosis and relevant clinical findings from the document
+   - Explain why the requested procedure is medically necessary given the diagnosis
+   - Reference relevant clinical guidelines, standards of care, or evidence-based criteria where applicable
+   - Describe what conservative or alternative treatments have been tried or why they are not appropriate
+   - Articulate the clinical risk or harm if the procedure is not approved
+   - Use formal clinical language appropriate for a prior authorization submission
+   - Do NOT use placeholder text — synthesize everything present in the document to make the strongest possible case
 
 Return ONLY valid JSON with these 7 keys, no other text.
 
