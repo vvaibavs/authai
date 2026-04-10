@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
   const result = await model.generateContent(`
 You are a medical prior authorization specialist with deep clinical knowledge. Given the document text below, do two things:
 
-1. EXTRACT these fields exactly as they appear in the document. If a field is not found, use exactly: "Not found - please complete manually".
+1. EXTRACT these fields (or fields that mean the same thing) exactly as they appear in the document. If a field is not present, return null for that field. Return the results in a JSON object with these keys
    - patientName
    - dateOfBirth
    - insuranceId
@@ -45,7 +45,7 @@ You are a medical prior authorization specialist with deep clinical knowledge. G
    - Use formal clinical language appropriate for a prior authorization submission
    - Do NOT use placeholder text — synthesize everything present in the document to make the strongest possible case
 
-Return ONLY valid JSON with these 7 keys, no other text.
+Return ONLY valid JSON with these keys, no other text.
 
 Document:
 ${text}`)

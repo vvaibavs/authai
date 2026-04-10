@@ -5,22 +5,34 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/utils/storage'
 
+type PageState = 'verifying' | 'ready' | 'invalid'
+
 export default function ResetPasswordPage() {
   const router = useRouter()
+  const [pageState, setPageState] = useState<PageState>('verifying')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-  const [ready, setReady] = useState(false)
 
   useEffect(() => {
-    // Supabase exchanges the token from the URL hash and establishes a session
-    supabase.auth.onAuthStateChange((event) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'PASSWORD_RECOVERY') {
-        setReady(true)
+        setPageState('ready')
       }
     })
+
+    // If the user arrives without a recovery token (e.g. navigates here directly),
+    // show an error after a short wait rather than spinning forever.
+    const timeout = setTimeout(() => {
+      setPageState(prev => prev === 'verifying' ? 'invalid' : prev)
+    }, 3000)
+
+    return () => {
+      subscription.unsubscribe()
+      clearTimeout(timeout)
+    }
   }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -43,10 +55,14 @@ export default function ResetPasswordPage() {
 
     if (error) {
       setError(error.message)
-    } else {
-      setMessage('Password updated. Redirecting to sign in...')
-      setTimeout(() => router.push('/login'), 2000)
+      setLoading(false)
+      return
     }
+
+    // Sign out so the user must log in fresh with their new password
+    await supabase.auth.signOut()
+    setMessage('Password updated. Redirecting to sign in...')
+    setTimeout(() => router.push('/login'), 2000)
 
     setLoading(false)
   }
@@ -64,11 +80,18 @@ export default function ResetPasswordPage() {
           </Link>
         </p>
 
-        {!ready ? (
-          <p className="text-sm text-[var(--theme-textMuted)]">
-            Verifying your reset link...
+        {pageState === 'verifying' && (
+          <p className="text-sm text-[var(--theme-textMuted)]">Verifying your reset link...</p>
+        )}
+
+        {pageState === 'invalid' && (
+          <p className="text-sm text-[var(--theme-error)] bg-[var(--theme-errorBg)] border border-[var(--theme-errorBorder)] rounded-lg px-3 py-2">
+            This reset link is invalid or has expired.{' '}
+            <Link href="/forgot-password" className="underline">Request a new one.</Link>
           </p>
-        ) : (
+        )}
+
+        {pageState === 'ready' && (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-[var(--theme-textSecondary)] mb-1">

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/utils/storage'
@@ -8,6 +8,13 @@ import { supabase } from '@/utils/storage'
 export default function LoginPage() {
   const router = useRouter()
   const [mode, setMode] = useState<'signin' | 'signup'>('signin')
+
+  // Redirect already-authenticated users away from the login page
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) router.replace('/dashboard')
+    })
+  }, [router])
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)

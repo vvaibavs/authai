@@ -41,6 +41,8 @@ export default function Dashboard() {
   const [pendingFiles, setPendingFiles] = useState<File[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  const [patientName, setPatientName] = useState('')
+
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null)
   const [analysisStatus, setAnalysisStatus] = useState<Record<string, AnalysisStatus>>({})
   const [analysisResults, setAnalysisResults] = useState<Record<string, PriorAuthDraft>>({})
@@ -56,17 +58,33 @@ export default function Dashboard() {
     if (user) fetchDocuments()
   }, [user])
 
+  useEffect(() => {
+    console.log(documents);
+  }, [])
+
   async function fetchDocuments() {
     setLoadingDocs(true)
     const docs = await listDocuments()
+    console.log('Fetched documents:', docs);
     setDocuments(docs)
     setLoadingDocs(false)
   }
 
   function stageFiles(files: FileList | File[] | null) {
     if (!files || files.length === 0) return
-    setPendingFiles(Array.from(files))
+    const incoming = Array.from(files)
+    setPendingFiles(prev => {
+      const existingNames = new Set(prev.map(f => f.name))
+      const deduped = incoming.filter(f => !existingNames.has(f.name))
+      return [...prev, ...deduped]
+    })
     setError(null)
+    // Reset input so the same file can be re-added after removal
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  function removePendingFile(name: string) {
+    setPendingFiles(prev => prev.filter(f => f.name !== name))
   }
 
   async function handleUpload() {
@@ -75,7 +93,7 @@ export default function Dashboard() {
     setUploading(true)
 
     for (const file of pendingFiles) {
-      const result = await uploadDocument(file, user.id)
+      const result = await uploadDocument(file, user.id, patientName)
       if ('error' in result) {
         setError(`Failed to upload "${file.name}": ${result.error}`)
       }
@@ -85,6 +103,109 @@ export default function Dashboard() {
     setUploading(false)
     if (fileInputRef.current) fileInputRef.current.value = ''
     await fetchDocuments()
+  }
+
+  async function handleAnalyzeGroup(docs: Document[]) {
+    if (!session || docs.length === 0) return
+
+    const ids = docs.map(d => d.id)
+
+    // Mark all docs as extracting
+    setAnalysisStatus(prev => {
+      const next = { ...prev }
+      ids.forEach(id => { next[id] = 'extracting' })
+      return next
+    })
+    setAnalysisErrors(prev => {
+      const next = { ...prev }
+      ids.forEach(id => { delete next[id] })
+      return next
+    })
+    setSelectedDocId(docs[0].id)
+
+    // 1. Extract text from each document
+    const texts: string[] = []
+    for (const doc of docs) {
+      const { data: blob, error: dlError } = await supabase.storage
+        .from('documents')
+        .download(doc.storage_path)
+
+      if (dlError || !blob) {
+        setAnalysisStatus(prev => { const n = { ...prev }; ids.forEach(id => { n[id] = 'error' }); return n })
+        setAnalysisErrors(prev => {
+          const n = { ...prev }
+          ids.forEach(id => { n[id] = `Failed to download "${doc.filename}"` })
+          return n
+        })
+        return
+      }
+
+      const formData = new FormData()
+      formData.append('file', new File([blob], doc.filename))
+      const extractRes = await fetch('/api/extract', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        body: formData,
+      })
+
+      if (!extractRes.ok) {
+        const json = await extractRes.json().catch(() => ({}))
+        setAnalysisStatus(prev => { const n = { ...prev }; ids.forEach(id => { n[id] = 'error' }); return n })
+        setAnalysisErrors(prev => {
+          const n = { ...prev }
+          ids.forEach(id => { n[id] = json.error ?? `Text extraction failed for "${doc.filename}"` })
+          return n
+        })
+        return
+      }
+
+      const { text } = await extractRes.json()
+      texts.push(`--- ${doc.filename} ---\n${text}`)
+    }
+
+    // 2. Analyze combined text once
+    setAnalysisStatus(prev => { const n = { ...prev }; ids.forEach(id => { n[id] = 'analyzing' }); return n })
+
+    const analyzeRes = await fetch('/api/analyze', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ text: texts.join('\n\n') }),
+    })
+
+    if (!analyzeRes.ok) {
+      const json = await analyzeRes.json().catch(() => ({}))
+      setAnalysisStatus(prev => { const n = { ...prev }; ids.forEach(id => { n[id] = 'error' }); return n })
+      setAnalysisErrors(prev => {
+        const n = { ...prev }
+        ids.forEach(id => { n[id] = json.error ?? 'Analysis failed' })
+        return n
+      })
+      return
+    }
+
+    const { data } = await analyzeRes.json()
+    const merged = {
+      ...data,
+      patientName: data.patientName === NOT_FOUND && patientName.trim()
+        ? patientName.trim()
+        : data.patientName,
+    }
+
+    // 3. Store the shared result on every doc in the group
+    setAnalysisResults(prev => {
+      const n = { ...prev }
+      ids.forEach(id => { n[id] = merged })
+      return n
+    })
+    setEditedFields(prev => {
+      const n = { ...prev }
+      ids.forEach(id => { n[id] = { ...merged } })
+      return n
+    })
+    setAnalysisStatus(prev => { const n = { ...prev }; ids.forEach(id => { n[id] = 'done' }); return n })
   }
 
   async function handleDelete(doc: Document) {
@@ -152,8 +273,14 @@ export default function Dashboard() {
     }
 
     const { data } = await analyzeRes.json()
-    setAnalysisResults(prev => ({ ...prev, [doc.id]: data }))
-    setEditedFields(prev => ({ ...prev, [doc.id]: { ...data } }))
+    const merged = {
+      ...data,
+      patientName: data.patientName === NOT_FOUND && patientName.trim()
+        ? patientName.trim()
+        : data.patientName,
+    }
+    setAnalysisResults(prev => ({ ...prev, [doc.id]: merged }))
+    setEditedFields(prev => ({ ...prev, [doc.id]: { ...merged } }))
     setAnalysisStatus(prev => ({ ...prev, [doc.id]: 'done' }))
   }
 
@@ -191,6 +318,13 @@ export default function Dashboard() {
     stageFiles(e.dataTransfer.files)
   }, [])
 
+  const groupedDocuments = documents.reduce<Record<string, typeof documents>>((acc, doc) => {
+    const key = doc.patient_name
+    if (!acc[key]) acc[key] = []
+    acc[key].push(doc)
+    return acc
+  }, {})
+
   const selectedDoc = documents.find(d => d.id === selectedDocId) ?? null
   const selectedStatus = selectedDocId ? (analysisStatus[selectedDocId] ?? 'idle') : 'idle'
 
@@ -211,7 +345,7 @@ export default function Dashboard() {
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
           <h1 className="text-2xl font-bold text-[var(--theme-textPrimary)]">Your Documents</h1>
           <p className="text-sm text-[var(--theme-textMuted)] mt-1">
-            Upload prior authorization documents to extract and review key fields.
+            Upload Clinical Notes/Referral letter to generate prior authorization drafts.
           </p>
         </div>
       </div>
@@ -221,6 +355,23 @@ export default function Dashboard() {
 
           {/* Left column: upload + docs list */}
           <div className="space-y-6">
+            {/* Patient name input */}
+            <div className="bg-[var(--theme-surface)] rounded-xl border border-[var(--theme-border)] px-5 py-4">
+              <label className="block text-xs font-medium text-[var(--theme-textMuted)] mb-1.5">
+                Patient Name
+              </label>
+              <input
+                type="text"
+                value={patientName}
+                onChange={e => setPatientName(e.target.value)}
+                placeholder="e.g. Jane Smith"
+                className="w-full text-sm px-3 py-2 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-background)] text-[var(--theme-textPrimary)] placeholder-[var(--theme-textMuted)] focus:outline-none focus:ring-2 focus:ring-[var(--theme-primary)] transition-colors"
+              />
+              <p className="text-xs text-[var(--theme-textMuted)] mt-1.5">
+                Pre-fills the patient name field if the AI cannot extract it from the document.
+              </p>
+            </div>
+
             {/* Upload area */}
             <div
               onDragOver={handleDragOver}
@@ -260,7 +411,16 @@ export default function Dashboard() {
                 <div className="space-y-3">
                   <ul className="text-sm text-[var(--theme-textSecondary)] space-y-1">
                     {pendingFiles.map(f => (
-                      <li key={f.name} className="truncate">{f.name}</li>
+                      <li key={f.name} className="flex items-center justify-between gap-2">
+                        <span className="truncate">{f.name}</span>
+                        <button
+                          onClick={() => removePendingFile(f.name)}
+                          className="shrink-0 text-[var(--theme-textMuted)] hover:text-red-500 transition-colors"
+                          aria-label={`Remove ${f.name}`}
+                        >
+                          ✕
+                        </button>
+                      </li>
                     ))}
                   </ul>
                   <div className="flex items-center justify-center gap-3">
@@ -281,6 +441,7 @@ export default function Dashboard() {
                 </div>
               )}
             </div>
+
 
             {error && (
               <div className="text-sm text-[var(--theme-error)] bg-[var(--theme-errorBg)] border border-[var(--theme-errorBorder)] rounded-lg px-4 py-3">
@@ -307,70 +468,80 @@ export default function Dashboard() {
                   <p className="text-sm text-[var(--theme-textMuted)]">No documents yet — upload one above.</p>
                 </div>
               ) : (
-                <ul className="divide-y divide-[var(--theme-borderLight)]">
-                  {documents.map(doc => {
-                    const status = analysisStatus[doc.id] ?? 'idle'
-                    const isSelected = selectedDocId === doc.id
-                    const isRunning = status === 'extracting' || status === 'analyzing'
-
-                    return (
-                      <li
-                        key={doc.id}
-                        onClick={() => setSelectedDocId(doc.id)}
-                        className={`px-5 py-3.5 flex items-center justify-between gap-4 cursor-pointer transition-colors ${
-                          isSelected
-                            ? 'bg-[var(--theme-primaryLight)]'
-                            : 'hover:bg-[var(--theme-surfaceHover)]'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          {/* Status dot */}
-                          <span className={`shrink-0 h-2 w-2 rounded-full ${
-                            status === 'done' ? 'bg-green-500' :
-                            status === 'error' ? 'bg-red-500' :
-                            isRunning ? 'bg-yellow-400 animate-pulse' :
-                            'bg-[var(--theme-border)]'
-                          }`} />
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-[var(--theme-textPrimary)] truncate">{doc.filename}</p>
-                            <p className="text-xs text-[var(--theme-textMuted)] mt-0.5">
-                              {new Date(doc.uploaded_at).toLocaleString()}
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2 shrink-0">
-                          {status === 'idle' || status === 'error' ? (
-                            <button
-                              onClick={e => { e.stopPropagation(); handleAnalyze(doc) }}
-                              className="text-xs bg-[var(--theme-primary)] text-white px-3 py-1 rounded-md hover:bg-[var(--theme-primaryHover)] transition-colors"
-                            >
-                              {status === 'error' ? 'Retry' : 'Analyze'}
-                            </button>
-                          ) : isRunning ? (
-                            <div className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--theme-spinner)] border-r-transparent" />
+                <div className="divide-y divide-[var(--theme-borderLight)]">
+                  {Object.entries(groupedDocuments).map(([patient, docs]) => (
+                    <div key={patient}>
+                      <div className="px-5 py-2 bg-[var(--theme-background)] flex items-center justify-between">
+                        <span className="text-xs font-semibold text-[var(--theme-textMuted)] uppercase tracking-wide">
+                          {patient}
+                        </span>
+                        {(() => {
+                          const groupRunning = docs.some(d => {
+                            const s = analysisStatus[d.id] ?? 'idle'
+                            return s === 'extracting' || s === 'analyzing'
+                          })
+                          const allDone = docs.every(d => (analysisStatus[d.id] ?? 'idle') === 'done')
+                          return groupRunning ? (
+                            <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-[var(--theme-spinner)] border-r-transparent" />
                           ) : (
                             <button
-                              onClick={e => { e.stopPropagation(); handleAnalyze(doc) }}
-                              className="text-xs text-[var(--theme-textMuted)] hover:text-[var(--theme-textSecondary)] transition-colors"
+                              onClick={() => handleAnalyzeGroup(docs)}
+                              className="text-xs bg-[var(--theme-primary)] text-white px-3 py-1 rounded-md hover:bg-[var(--theme-primaryHover)] transition-colors"
                             >
-                              Re-run
+                              {allDone ? 'Re-run all' : 'Analyze all'}
                             </button>
-                          )}
-                          <button
-                            onClick={e => { e.stopPropagation(); handleDelete(doc) }}
-                            className="text-xs text-[var(--theme-textMuted)] hover:text-red-500 transition-colors"
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </li>
-                    )
-                  })}
-                </ul>
+                          )
+                        })()}
+                      </div>
+                      <ul className="divide-y divide-[var(--theme-borderLight)]">
+                        {docs.map(doc => {
+                          const status = analysisStatus[doc.id] ?? 'idle'
+                          const isSelected = selectedDocId === doc.id
+
+                          return (
+                            <li
+                              key={doc.id}
+                              onClick={() => setSelectedDocId(doc.id)}
+                              className={`px-5 py-3.5 flex items-center justify-between gap-4 cursor-pointer transition-colors ${
+                                isSelected
+                                  ? 'bg-[var(--theme-primaryLight)]'
+                                  : 'hover:bg-[var(--theme-surfaceHover)]'
+                              }`}
+                            >
+                              <div className="flex items-center gap-3 min-w-0">
+                                <span className={`shrink-0 h-2 w-2 rounded-full ${
+                                  status === 'done' ? 'bg-green-500' :
+                                  status === 'error' ? 'bg-red-500' :
+                                  status === 'extracting' || status === 'analyzing' ? 'bg-yellow-400 animate-pulse' :
+                                  'bg-[var(--theme-border)]'
+                                }`} />
+                                <div className="min-w-0">
+                                  <p className="text-sm font-medium text-[var(--theme-textPrimary)] truncate">{doc.filename}</p>
+                                  <p className="text-xs text-[var(--theme-textMuted)] mt-0.5">
+                                    {new Date(doc.uploaded_at).toLocaleString()}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <button
+                                onClick={e => { e.stopPropagation(); handleDelete(doc) }}
+                                className="shrink-0 text-xs text-[var(--theme-textMuted)] hover:text-red-500 transition-colors"
+                              >
+                                Delete
+                              </button>
+                            </li>
+                          )
+                        })}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           </div>
+
+
+
 
           {/* Right column: analysis panel */}
           <div className="bg-[var(--theme-surface)] rounded-xl border border-[var(--theme-border)] overflow-hidden sticky top-6">

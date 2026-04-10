@@ -17,6 +17,7 @@ export interface Document {
   storage_path: string
   filename: string
   uploaded_at: string
+  patient_name: string
 }
 
 /**
@@ -24,12 +25,13 @@ export interface Document {
  */
 export async function uploadDocument(
   file: File,
-  userId: string
+  userId: string,
+  patientName: string
 ): Promise<{ document: Document } | { error: string }> {
   // 1. Upload to storage
   const timestamp = Date.now()
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
-  const storagePath = `${userId}/${timestamp}-${safeName}`
+  const storagePath = `${userId}/${patientName}/${timestamp}-${safeName}`
 
   const { error: storageError } = await supabase.storage
     .from(BUCKET)
@@ -70,8 +72,12 @@ export async function listDocuments(): Promise<Document[]> {
     console.error('List error:', error)
     return []
   }
+  console.log('Documents:', data)
 
-  return data as Document[]
+  return (data as Omit<Document, 'patient_name'>[]).map(doc => ({
+    ...doc,
+    patient_name: doc.storage_path.split('/')[1] ?? 'Unknown',
+  }))
 }
 
 /**
